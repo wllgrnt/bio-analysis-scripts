@@ -37,6 +37,3 @@ for nd2_filepath in glob(f'{FOLDER_PATH}/*.nd2'):
 
         # viewer = napari.view_image(zmax, channel_axis=2, ndisplay=3)
         # napari.run()
-
-
-
