@@ -5,13 +5,11 @@ Given a csv file, extract the well number and xy from the file name, and count
 the number of nuclei and 'edge spots' in each xy.
 
 """
-
+import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import re
-
-# set up your variable names
 
 sns.set_style("whitegrid")
 
@@ -26,9 +24,12 @@ INPUT_PATHS = [
 ]
 
 
-# read the csv
 def extract_xy(input_string):
-    return int(re.search(r"(?<=_XY)\d+", input_string).group(0))
+    """Christina is a criminal, and her xys are not consistently formatted."""
+    try:
+        return int(re.search(r"(?<=_XY)\d+", input_string).group(0))
+    except AttributeError:
+        return int(re.search(r"(?<=_)\d{4}(?=_)", input_string).group(0))
 
 
 def extract_well_number(input_string):
@@ -36,14 +37,7 @@ def extract_well_number(input_string):
 
 
 for input_path in INPUT_PATHS:
-    # header=0,1 would get you a multiindex but we can drop for now
     cellprofiler_output_df = pd.read_csv(input_path, header=[0, 1])
-    # cellprofiler_output_df = pd.read_csv(input_path, header=1)
-
-    # print(cellprofiler_output_df['Image'])
-    # print(cellprofiler_output_df['Image'].columns)
-    # print(cellprofiler_output_df['Image']['Filename_Hoechst'])
-    # extract the XY and T values from the filename
     cellprofiler_output_df["XY"] = cellprofiler_output_df["Image"][
         FILENAME_COLUMN
     ].apply(extract_xy)
@@ -60,13 +54,21 @@ for input_path in INPUT_PATHS:
     cellprofiler_output_df = cellprofiler_output_df[
         ["T", "XY", "nuclei_count", "edge_spot_count"]
     ].reset_index(drop=True)
-    # cellprofiler_output_df.columns = ['well_number', 'XY', 'nuclei_count', 'edge_spot_count']
-
     counts = cellprofiler_output_df.groupby(["T", "XY"]).count().reset_index()
     counts["edge_spot_fraction"] = counts["edge_spot_count"] / counts["nuclei_count"]
 
-    print(counts)
+    # plot the results
     fig, ax = plt.subplots()
     counts.plot.scatter(x="T", y="edge_spot_fraction", ax=ax)
     ax.set_title(input_path)
-    plt.show()
+    # get the name of the input file without its parent folder
+    output_path = (
+        "output_files/"
+        + os.path.basename(os.path.dirname(input_path))
+        + "_"
+        + os.path.basename(input_path)[:-4]
+        + ".png"
+    )
+    plt.savefig(output_path)
+    counts.to_csv(output_path[:-4] + ".csv", index=False)
+    # plt.show()
