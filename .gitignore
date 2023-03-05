@@ -1,6 +1,8 @@
 # ignore data files
 input_files/
 output_files/
+
+*.cppipe
 # vim cruft
 .*.un~
 
