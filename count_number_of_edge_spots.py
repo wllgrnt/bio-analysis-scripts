@@ -18,13 +18,13 @@ sns.set_style("whitegrid")
 FILENAME_COLUMN = "FileName_Hoechst"  # from which we extract the well number and xy
 NUCLEI_COUNT_COLUMN = "ObjectNumber"
 EDGE_SPOT_COUNT_COLUMN = "Number_Object_Number"
-INPUT_PATHS = glob.glob("input_files/edge_spot_fixed_time/*/All_measurements.csv")
+INPUT_PATHS = glob.glob("input_files/*/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
 SHOW_FIG = False
 VARIABLES = ["WellNumber", "XY"]
 
 
-def extract_xy(input_string):
+def extract_xy(input_string: str) -> int:
     """(Christina is a criminal, and her xys are not consistently formatted)"""
     try:
         return int(re.search(r"(?<=_XY)\d+", input_string).group(0))
@@ -32,17 +32,17 @@ def extract_xy(input_string):
         return int(re.search(r"(?<=_)\d{4}(?=_)", input_string).group(0))
 
 
-def extract_timestamp(input_string):
+def extract_timestamp(input_string: str) -> int:
     return int(re.search(r"(?<=_T)\d+", input_string).group(0))
 
 
-def extract_wellnumber(input_string):
+def extract_wellnumber(input_string: str) -> str:
     return re.search(r"(?<=_Well)[A-Z]\d+", input_string).group(0)
 
 
 def process_cellprofiler_df(
-    input_df, get_timestamp=False, get_xy=False, get_wellnumber=False
-):
+    input_df: pd.DataFrame, get_timestamp=False, get_xy=False, get_wellnumber=False
+) -> pd.DataFrame:
     """Given a cellprofiler dataframe, extract the data from the filename column."""
     use_cols = []
     if get_timestamp:
