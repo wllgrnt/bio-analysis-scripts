@@ -16,7 +16,7 @@ import re
 sns.set_style("whitegrid")
 
 FILENAME_COLUMN = "FileName_Hoechst"  # from which we extract the well number and xy
-NUCLEI_COUNT_COLUMN = "ObjectNumber"
+NUCLEI_COUNT_COLUMN = "Number_Object_Number"
 EDGE_SPOT_COUNT_COLUMN = "Number_Object_Number"
 EDGE_SPOT_MEDIAN_INTENSITY_COLUMN = (
     "Intensity_MedianIntensity_Subtract_perinucleus_Miro160mer"
@@ -26,7 +26,7 @@ EDGE_SPOT_MEAN_INTENSITY_COLUMN = (
 )
 INPUT_PATHS = glob.glob("input_files/for_will/*/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
-SHOW_FIG = False
+SHOW_FIG = True
 VARIABLES = ["WellNumber", "XY"]
 
 

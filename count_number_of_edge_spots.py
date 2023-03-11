@@ -16,7 +16,7 @@ import re
 sns.set_style("whitegrid")
 
 FILENAME_COLUMN = "FileName_Hoechst"  # from which we extract the well number and xy
-NUCLEI_COUNT_COLUMN = "ObjectNumber"
+NUCLEI_COUNT_COLUMN = "Number_Object_Number"
 EDGE_SPOT_COUNT_COLUMN = "Number_Object_Number"
 INPUT_PATHS = glob.glob("input_files/*/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
