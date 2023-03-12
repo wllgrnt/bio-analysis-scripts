@@ -136,23 +136,25 @@ for input_path in INPUT_PATHS:
     vals_per_fov.to_csv(output_path[:-4] + ".csv", index=False)
 
     # make pivot tables (there is probably a fancier way than the unique() iterator)
-    VAL_VARIABLE = "edge_spot_mean_intensity_mean"
+    VAL_VARIABLES = ["edge_spot_mean_intensity_mean", "edge_spot_fraction"]
     X_VARIABLE = "XY"
     Y_VARIABLE = "T"
     FILENAME_VARIABLE = "WellNumber"
 
     for well_number in vals_per_fov.WellNumber.unique():
-        pivot_filename = (
-            output_path[:-4] + f"_{VAL_VARIABLE}_{FILENAME_VARIABLE}{well_number}.csv"
-        )
         well_number_vals = vals_per_fov.query(f"{FILENAME_VARIABLE} == @well_number")
-        pivot = pd.pivot_table(
-            data=well_number_vals,
-            values=VAL_VARIABLE,
-            index=X_VARIABLE,
-            columns=Y_VARIABLE,
-        )
-        pivot.to_csv(pivot_filename, index=False)
+        for val_variable in VAL_VARIABLES:
+            pivot = pd.pivot_table(
+                data=well_number_vals,
+                values=val_variable,
+                index=X_VARIABLE,
+                columns=Y_VARIABLE,
+            )
+            pivot_filename = (
+                output_path[:-4]
+                + f"_{val_variable}_{FILENAME_VARIABLE}{well_number}.csv"
+            )
+            pivot.to_csv(pivot_filename, index=False)
 
     if SHOW_FIG:
         plt.show()
