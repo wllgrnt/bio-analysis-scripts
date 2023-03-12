@@ -24,10 +24,10 @@ EDGE_SPOT_MEDIAN_INTENSITY_COLUMN = (
 EDGE_SPOT_MEAN_INTENSITY_COLUMN = (
     "Intensity_MeanIntensity_Subtract_perinucleus_Miro160mer"
 )
-INPUT_PATHS = glob.glob("input_files/for_will/*/All_measurements.csv")
+INPUT_PATHS = glob.glob("input_files/for_will_3/*/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
-SHOW_FIG = True
-VARIABLES = ["WellNumber", "XY"]
+SHOW_FIG = False
+VARIABLES = ["T", "XY", "WellNumber"]
 
 
 def extract_xy(input_string: str) -> int:
@@ -43,7 +43,7 @@ def extract_timestamp(input_string: str) -> int:
 
 
 def extract_wellnumber(input_string: str) -> str:
-    return re.search(r"(?<=_Well)[A-Z]\d+", input_string).group(0)
+    return re.search(r"(?<=Well)[A-Z]\d+", input_string).group(0)
 
 
 def process_cellprofiler_df(
@@ -121,6 +121,7 @@ for input_path in INPUT_PATHS:
     )
     for ax in axes:
         ax.set_title(input_path)
+
     # get the name of the input file without its parent folder
     output_path = (
         OUTPUT_PATH
@@ -133,5 +134,25 @@ for input_path in INPUT_PATHS:
     plt.savefig(output_path)
     processed_df.to_csv(output_path[:-4] + "_raw.csv", index=False)
     vals_per_fov.to_csv(output_path[:-4] + ".csv", index=False)
+
+    # make pivot tables (there is probably a fancier way than the unique() iterator)
+    VAL_VARIABLE = "edge_spot_mean_intensity_mean"
+    X_VARIABLE = "XY"
+    Y_VARIABLE = "T"
+    FILENAME_VARIABLE = "WellNumber"
+
+    for well_number in vals_per_fov.WellNumber.unique():
+        pivot_filename = (
+            output_path[:-4] + f"_{VAL_VARIABLE}_{FILENAME_VARIABLE}{well_number}.csv"
+        )
+        well_number_vals = vals_per_fov.query(f"{FILENAME_VARIABLE} == @well_number")
+        pivot = pd.pivot_table(
+            data=well_number_vals,
+            values=VAL_VARIABLE,
+            index=X_VARIABLE,
+            columns=Y_VARIABLE,
+        )
+        pivot.to_csv(pivot_filename, index=False)
+
     if SHOW_FIG:
         plt.show()
