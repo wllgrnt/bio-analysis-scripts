@@ -24,10 +24,10 @@ EDGE_SPOT_MEDIAN_INTENSITY_COLUMN = (
 EDGE_SPOT_MEAN_INTENSITY_COLUMN = (
     "Intensity_MeanIntensity_Subtract_perinucleus_Miro160mer"
 )
-INPUT_PATHS = glob.glob("input_files/for_will_3/*/All_measurements.csv")
+INPUT_PATHS = glob.glob("input_files/for_will_7/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
-SHOW_FIG = False
-VARIABLES = ["T", "XY", "WellNumber"]
+SHOW_FIG = True
+VARIABLES = ["XY", "WellNumber"]
 
 
 def extract_xy(input_string: str) -> int:
@@ -138,22 +138,36 @@ for input_path in INPUT_PATHS:
     # make pivot tables (there is probably a fancier way than the unique() iterator)
     VAL_VARIABLES = ["edge_spot_mean_intensity_mean", "edge_spot_fraction"]
     X_VARIABLE = "XY"
-    Y_VARIABLE = "T"
-    FILENAME_VARIABLE = "WellNumber"
+    Y_VARIABLE = "WellNumber"
+    FILENAME_VARIABLE = None
 
-    for well_number in vals_per_fov.WellNumber.unique():
-        well_number_vals = vals_per_fov.query(f"{FILENAME_VARIABLE} == @well_number")
+    if FILENAME_VARIABLE is not None:
+        for filename_var in vals_per_fov[FILENAME_VARIABLE].unique():
+            filename_var_vals = vals_per_fov.query(
+                f"{FILENAME_VARIABLE} == @filename_var"
+            )
+            for val_variable in VAL_VARIABLES:
+                pivot = pd.pivot_table(
+                    data=filename_var_vals,
+                    values=val_variable,
+                    index=X_VARIABLE,
+                    columns=Y_VARIABLE,
+                )
+                pivot_filename = (
+                    output_path[:-4]
+                    + f"_{val_variable}_{FILENAME_VARIABLE}{filename_var}.csv"
+                )
+                pivot.to_csv(pivot_filename, index=False)
+
+    else:
         for val_variable in VAL_VARIABLES:
             pivot = pd.pivot_table(
-                data=well_number_vals,
+                data=vals_per_fov,
                 values=val_variable,
                 index=X_VARIABLE,
                 columns=Y_VARIABLE,
             )
-            pivot_filename = (
-                output_path[:-4]
-                + f"_{val_variable}_{FILENAME_VARIABLE}{well_number}.csv"
-            )
+            pivot_filename = output_path[:-4] + f"_{val_variable}.csv"
             pivot.to_csv(pivot_filename, index=False)
 
     if SHOW_FIG:
