@@ -26,7 +26,7 @@ EDGE_SPOT_MEAN_INTENSITY_COLUMN = (
 )
 INPUT_PATHS = glob.glob("input_files/for_will_7/All_measurements.csv")
 OUTPUT_PATH = "output_files/"
-SHOW_FIG = True
+SHOW_FIG = False
 VARIABLES = ["XY", "WellNumber"]
 
 
@@ -84,19 +84,12 @@ def process_cellprofiler_df(
     return processed_df
 
 
-for input_path in INPUT_PATHS:
-    print(input_path)
-    cellprofiler_df = pd.read_csv(input_path, header=[0, 1])
+def aggregate_df(input_df: pd.DataFrame) -> pd.DataFrame:
+    """Given a cleaned df, aggregate over VARIABLES."""
+    global VARIABLES
 
-    processed_df = process_cellprofiler_df(
-        cellprofiler_df,
-        get_timestamp="T" in VARIABLES,
-        get_xy="XY" in VARIABLES,
-        get_wellnumber="WellNumber" in VARIABLES,
-    )
-    # count the non-nan nuclei and edge spots, and mean/median the intensity
-    vals_per_fov = (
-        processed_df.groupby(VARIABLES)
+    output_df = (
+        input_df.groupby(VARIABLES)
         .agg(
             edge_spot_count=("edge_spot_count", "count"),
             nuclei_count=("nuclei_count", "count"),
@@ -108,67 +101,81 @@ for input_path in INPUT_PATHS:
         .reset_index()
     )
 
-    # vals_per_fov = processed_df.groupby(VARIABLES).count().reset_index()
-    vals_per_fov["edge_spot_fraction"] = (
-        vals_per_fov["edge_spot_count"] / vals_per_fov["nuclei_count"]
+    output_df["edge_spot_fraction"] = (
+        output_df["edge_spot_count"] / output_df["nuclei_count"]
     )
 
-    # plot the results
-    fig, axes = plt.subplots(nrows=2, figsize=(7, 10))
-    vals_per_fov.plot.scatter(x=VARIABLES[0], y="edge_spot_fraction", ax=axes[0])
-    vals_per_fov.plot.scatter(
-        x=VARIABLES[0], y="edge_spot_median_intensity_median", ax=axes[1]
-    )
-    for ax in axes:
-        ax.set_title(input_path)
+    return output_df
 
-    # get the name of the input file without its parent folder
-    output_path = (
-        OUTPUT_PATH
-        + os.path.basename(os.path.dirname(input_path))
-        + "_"
-        + os.path.basename(input_path)[:-4]
-        + ".png"
-    )
-    plt.tight_layout()
-    plt.savefig(output_path)
-    processed_df.to_csv(output_path[:-4] + "_raw.csv", index=False)
-    vals_per_fov.to_csv(output_path[:-4] + ".csv", index=False)
 
-    # make pivot tables (there is probably a fancier way than the unique() iterator)
-    VAL_VARIABLES = ["edge_spot_mean_intensity_mean", "edge_spot_fraction"]
-    X_VARIABLE = "XY"
-    Y_VARIABLE = "WellNumber"
-    FILENAME_VARIABLE = None
+if __name__ == "__main__":
+    for input_path in INPUT_PATHS:
+        cellprofiler_df = pd.read_csv(input_path, header=[0, 1])
 
-    if FILENAME_VARIABLE is not None:
-        for filename_var in vals_per_fov[FILENAME_VARIABLE].unique():
-            filename_var_vals = vals_per_fov.query(
-                f"{FILENAME_VARIABLE} == @filename_var"
-            )
+        processed_df = process_cellprofiler_df(
+            cellprofiler_df,
+            get_timestamp="T" in VARIABLES,
+            get_xy="XY" in VARIABLES,
+            get_wellnumber="WellNumber" in VARIABLES,
+        )
+
+        aggregated_by_field_of_view = aggregate_df(processed_df)
+
+        # get the name of the input file without its parent folder
+        output_path = (
+            OUTPUT_PATH
+            + os.path.basename(os.path.dirname(input_path))
+            + "_"
+            + os.path.basename(input_path)[:-4]
+        )
+        processed_df.to_csv(output_path + "_raw.csv", index=False)
+        aggregated_by_field_of_view.to_csv(output_path + ".csv", index=False)
+
+        # make pivot tables (there is probably a fancier way than the unique() iterator)
+        VAL_VARIABLES = ["edge_spot_mean_intensity_mean", "edge_spot_fraction"]
+        X_VARIABLE = "XY"
+        Y_VARIABLE = "WellNumber"
+        FILENAME_VARIABLE = None
+
+        if FILENAME_VARIABLE is not None:
+            for filename_var in aggregated_by_field_of_view[FILENAME_VARIABLE].unique():
+                filename_var_vals = aggregated_by_field_of_view.query(
+                    f"{FILENAME_VARIABLE} == @filename_var"
+                )
+                for val_variable in VAL_VARIABLES:
+                    pivot = pd.pivot_table(
+                        data=filename_var_vals,
+                        values=val_variable,
+                        index=X_VARIABLE,
+                        columns=Y_VARIABLE,
+                    )
+                    pivot_filename = (
+                        output_path
+                        + f"_{val_variable}_{FILENAME_VARIABLE}{filename_var}.csv"
+                    )
+                    pivot.to_csv(pivot_filename, index=False)
+
+        else:
             for val_variable in VAL_VARIABLES:
                 pivot = pd.pivot_table(
-                    data=filename_var_vals,
+                    data=aggregated_by_field_of_view,
                     values=val_variable,
                     index=X_VARIABLE,
                     columns=Y_VARIABLE,
                 )
-                pivot_filename = (
-                    output_path[:-4]
-                    + f"_{val_variable}_{FILENAME_VARIABLE}{filename_var}.csv"
-                )
+                pivot_filename = output_path + f"_{val_variable}.csv"
                 pivot.to_csv(pivot_filename, index=False)
 
-    else:
-        for val_variable in VAL_VARIABLES:
-            pivot = pd.pivot_table(
-                data=vals_per_fov,
-                values=val_variable,
-                index=X_VARIABLE,
-                columns=Y_VARIABLE,
+        if SHOW_FIG:
+            # plot the results
+            fig, axes = plt.subplots(nrows=2, figsize=(7, 10))
+            aggregated_by_field_of_view.plot.scatter(
+                x=VARIABLES[0], y="edge_spot_fraction", ax=axes[0]
             )
-            pivot_filename = output_path[:-4] + f"_{val_variable}.csv"
-            pivot.to_csv(pivot_filename, index=False)
-
-    if SHOW_FIG:
-        plt.show()
+            aggregated_by_field_of_view.plot.scatter(
+                x=VARIABLES[0], y="edge_spot_median_intensity_median", ax=axes[1]
+            )
+            for ax in axes:
+                ax.set_title(input_path)
+            plt.tight_layout()
+            plt.show()
