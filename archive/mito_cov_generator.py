@@ -1,10 +1,9 @@
-# this code is horrible and should be refactored immediately
-
-# import the libraries you need
 import pandas as pd  # for reading/writing and table manipulation
 import seaborn as sns  # for plotting
 import matplotlib.pyplot as plt  # also for plotting
 import glob  # for wildcard matching
+
+from count_total_and_mean_edge_spots import *
 
 # set up your variable names
 
@@ -19,22 +18,31 @@ IMPORTANT_COLUMNS = [
     "Intensity_MassDisplacement_mito",
 ]
 
+INPUT_PATHS = glob.glob("input_files/for_will_8/Expand_Nuclei.csv")
+
 stitched_dict = {x: {} for x in IMPORTANT_COLUMNS}
 
-for input_path in glob.glob("230118/*/Expand_Nuclei.csv"):
+FILENAME_COLUMN = "FileName_MIRO160mer"  # from which we extract the well number and xy
+STD_COLUMN = "Intensity_StdIntensity_MIRO160mer"
+MEAN_COLUMN = "Intensity_MeanIntensity_MIRO160mer"
+
+for input_path in INPUT_PATHS:
     # read the csv
     cellprofiler_output_df = pd.read_csv(input_path)
 
     # make the CoV
     cellprofiler_output_df["CoV"] = (
-        cellprofiler_output_df["Intensity_StdIntensity_MIRO160mer"]
-        / cellprofiler_output_df["Intensity_MeanIntensity_MIRO160mer"]
+        cellprofiler_output_df[STD_COLUMN] / cellprofiler_output_df[MEAN_COLUMN]
     )
 
     # grab the well number
     cellprofiler_output_df["well_number"] = cellprofiler_output_df[
-        "FileName_MIRO160mer"
-    ].str.slice(SLICE_INDEX_START, SLICE_INDEX_STOP)
+        FILENAME_COLUMN
+    ].apply(
+        extract_wellnumber  # noqa: F405
+    )
+
+    print(cellprofiler_output_df)
 
     for important_col in IMPORTANT_COLUMNS:
         # for each well number, take the values of <important_column>, and put in a dict
@@ -59,6 +67,7 @@ for input_path in glob.glob("230118/*/Expand_Nuclei.csv"):
 
         # relabel the median dictionary and normalise by the first value
         median_dict_normalised = {}
+        print(median_dict.keys())
         for key, value in median_dict.items():
             minute = (int(key[1:]) - 1) * 40  # this 15 should be changed
             median_dict_normalised[minute] = median_dict[key] / median_dict["T01"]
