@@ -1,6 +1,7 @@
 # ignore data files
-input_files/
-output_files/
+input_folder/
+output_folder/
+archive/
 
 *.cppipe
 # vim cruft
