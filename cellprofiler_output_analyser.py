@@ -86,6 +86,9 @@ Script parameters:
     - t_varies: boolean, whether the T parameter varies or not
     - plot: boolean, whether to plot the output.
 
+
+TODO: Refactor - there is redundancy, especially between the CoV and mass displacement code
+
 """
 import glob
 import logging
@@ -104,19 +107,20 @@ logging.basicConfig(level=logging.INFO)
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
 INPUT_SUBFOLDER = (
-    "no_t_variance"  # the path to the specific files we're analysing right now.
+    "analysis"  # the path to the specific files we're analysing right now.
 )
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
-T_VARIES = False
 EDGE_SPOT_FILE = "All_measurements.csv"
 MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
+COV_FILE = "Perinuclear_region.csv"
 # Sometimes the mito or 60mer is not present. If not, comment out the line:
 MASS_DISPLACEMENT_COLS = {
-    # "mass_displacement_mito": "Intensity_MassDisplacement_mito",
-    "mass_displacement_60mer": "Intensity_MassDisplacement_MIRO160mer"
+    "mass_displacement_mito": "Intensity_MassDisplacement_mito",
+    "mass_displacement_60mer": "Intensity_MassDisplacement_MIRO160mer",
 }
 LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
-PLOT = True
+PLOT = False
+T_VARIES = True
 # ---------------------------------------
 
 
@@ -275,6 +279,25 @@ def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFra
     return output_df
 
 
+def extract_cov_cols(cellprofiler_df, t_varies: bool) -> pd.DataFrame:
+    """Extract well number, xy, t, and CoV."""
+    logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
+    filename_column = "FileName_MIRO160mer"
+    std_column = "Intensity_StdIntensity_MIRO160mer"
+    mean_column = "Intensity_MeanIntensity_MIRO160mer"
+    output_df = cellprofiler_df.copy()
+    if t_varies:
+        output_df["T"] = output_df[filename_column].apply(extract_timestamp)
+    output_df["XY"] = output_df[filename_column].apply(extract_xy)
+    output_df["WellNumber"] = output_df[filename_column].apply(extract_wellnumber)
+    output_df["CoV"] = output_df[std_column] / output_df[mean_column]
+    cols = ["WellNumber", "XY", "CoV"]
+    if t_varies:
+        cols.append("T")
+    output_df = output_df[cols].reset_index(drop=True)
+    return output_df
+
+
 def extract_xy(input_string: str) -> int:
     try:
         return int(re.search(r"(?<=_XY)\d+", input_string).group(0))
@@ -318,98 +341,127 @@ def generate_mass_displacement_files(
     raw_input_df = pd.read_csv(mass_displacement_file_path)
     processed_df = extract_massdisplacement_cols(raw_input_df, t_varies)
     for displacement_type in MASS_DISPLACEMENT_COLS:
-        if t_varies:
-            # A file per wellnumber, with T and XY as columns and subcolumns
-            subdf = processed_df[["WellNumber", "XY", "T", displacement_type]]
-            for well_number in subdf.WellNumber.unique():
-                well_number_subdf = subdf[subdf.WellNumber == well_number]
-                # highly mysterious pandas esoterica to generate columns for T and XY
-                output_filename = os.path.join(
-                    output_folder, f"{displacement_type}_time_and_xy_{well_number}.csv"
-                )
-                output_df = (
-                    well_number_subdf.drop(columns=["WellNumber"])
-                    .set_index(["T", "XY"])
-                    .squeeze()
-                )
-                output_df = output_df.reset_index(name="value")
-                output_df["index"] = output_df.groupby(["T", "XY"]).cumcount()
-                output_df = output_df.set_index(["T", "XY", "index"])["value"].unstack(
-                    level=[0, 1]
-                )
-                logger.info(
-                    f"writing mass displacement table with shape {output_df.shape}: {output_filename}"
-                )
-                output_df.to_csv(output_filename)
+        generate_ragged_df(
+            processed_df,
+            data_column=displacement_type,
+            output_folder=output_folder,
+            t_varies=t_varies,
+            do_plot=do_plot,
+        )
 
-                # pivot to generate a column for each T
-                stacked_df = well_number_subdf.drop(columns=["WellNumber", "XY"])
-                stacked_df["count"] = stacked_df.groupby("T").cumcount()
-                stacked_df = stacked_df.pivot(
-                    index="count", columns="T", values=displacement_type
-                )
-                output_filename = os.path.join(
-                    output_folder, f"{displacement_type}_stacked_{well_number}.csv"
-                )
-                logger.info(
-                    f"writing stacked mass displacement table with shape {stacked_df.shape}: {output_filename}"
-                )
-                stacked_df.to_csv(output_filename)
 
-            # Average over Well, T, save and plot
-            average_over_time = (
-                subdf.groupby(["WellNumber", "T"])[displacement_type]
-                .mean()
-                .reset_index()
-            )
-            pivot = pd.pivot_table(
-                data=average_over_time,
-                values=displacement_type,
-                index="T",
-                columns="WellNumber",
-            )
-            pivot = pivot.divide(pivot.iloc[0])
-            output_path = os.path.join(
-                output_folder, f"{displacement_type}_mean_over_time_normalised.csv"
-            )
-            logger.info(
-                f"Normalised pivot table has shape {pivot.shape}, writing to {output_path}"
-            )
-            pivot.to_csv(output_path)
-            if do_plot:
-                pivot.plot(
-                    title=f"Mean {displacement_type} over time, normalised to T0"
-                )
-                plt.show()
+def generate_cov_files(cov_file_path, output_folder, t_varies, do_plot=True):
+    """Aggregate the CoV over all cells ( std intensity / mean intensity)
 
-        else:
-            # Generate a table with WellNumber and XY as columns, and the mass displacement as the vals
+    Highly similar to the mass displacement function.
+    """
+    logger.info(
+        f"Generate CoV data for {cov_file_path}, output to {output_folder}, t_varies={t_varies}"
+    )
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    raw_input_df = pd.read_csv(cov_file_path)
+    processed_df = extract_cov_cols(raw_input_df, t_varies)
+    generate_ragged_df(
+        processed_df,
+        data_column="CoV",
+        output_folder=output_folder,
+        t_varies=t_varies,
+        do_plot=do_plot,
+    )
+
+
+def generate_ragged_df(
+    input_df, data_column, output_folder, t_varies: bool, do_plot=True
+):
+    """In both mass displacement and CoV we extract some vals and stack them into a ragged df."""
+    if t_varies:
+        # A file per wellnumber, with T and XY as columns and subcolumns
+        subdf = input_df[["WellNumber", "XY", "T", data_column]]
+        for well_number in subdf.WellNumber.unique():
+            well_number_subdf = subdf[subdf.WellNumber == well_number]
+            # highly mysterious pandas esoterica to generate columns for T and XY
             output_filename = os.path.join(
-                output_folder, f"{displacement_type}_static.csv"
+                output_folder, f"{data_column}_time_and_xy_{well_number}.csv"
             )
-            subdf = processed_df[["WellNumber", "XY", displacement_type]]
-            subdf["index"] = subdf.groupby(["WellNumber", "XY"]).cumcount()
-            subdf = subdf.pivot(
-                index="index", columns=["WellNumber", "XY"], values=displacement_type
+            output_df = (
+                well_number_subdf.drop(columns=["WellNumber"])
+                .set_index(["T", "XY"])
+                .squeeze()
+            )
+            output_df = output_df.reset_index(name="value")
+            output_df["index"] = output_df.groupby(["T", "XY"]).cumcount()
+            output_df = output_df.set_index(["T", "XY", "index"])["value"].unstack(
+                level=[0, 1]
             )
             logger.info(
-                f"writing static mass displacement table with shape {subdf.shape}: {output_filename}"
+                f"writing {data_column} table with shape {output_df.shape}: {output_filename}"
             )
-            subdf.to_csv(output_filename)
+            output_df.to_csv(output_filename)
 
-            # Pivot to generate a column for each WellNumber
-            stacked_df = processed_df[["WellNumber", displacement_type]].copy()
-            stacked_df["count"] = stacked_df.groupby("WellNumber").cumcount()
+            # pivot to generate a column for each T
+            stacked_df = well_number_subdf.drop(columns=["WellNumber", "XY"])
+            stacked_df["count"] = stacked_df.groupby("T").cumcount()
             stacked_df = stacked_df.pivot(
-                index="count", columns="WellNumber", values=displacement_type
+                index="count", columns="T", values=data_column
             )
             output_filename = os.path.join(
-                output_folder, f"{displacement_type}_stacked_static.csv"
+                output_folder, f"{data_column}_stacked_{well_number}.csv"
             )
             logger.info(
-                f"writing stacked mass displacement table with shape {stacked_df.shape}: {output_filename}"
+                f"writing stacked {data_column} table with shape {stacked_df.shape}: {output_filename}"
             )
             stacked_df.to_csv(output_filename)
+
+        # Average over Well, T, save and plot
+        average_over_time = (
+            subdf.groupby(["WellNumber", "T"])[data_column].mean().reset_index()
+        )
+        pivot = pd.pivot_table(
+            data=average_over_time,
+            values=data_column,
+            index="T",
+            columns="WellNumber",
+        )
+        pivot = pivot.divide(pivot.iloc[0])
+        output_path = os.path.join(
+            output_folder, f"{data_column}_mean_over_time_normalised.csv"
+        )
+        logger.info(
+            f"Normalised pivot table has shape {pivot.shape}, writing to {output_path}"
+        )
+        pivot.to_csv(output_path)
+        if do_plot:
+            pivot.plot(title=f"Mean {data_column} over time, normalised to T0")
+            plt.show()
+
+    else:
+        # Generate a table with WellNumber and XY as columns, and the data column as the vals
+        output_filename = os.path.join(output_folder, f"{data_column}_static.csv")
+        subdf = input_df[["WellNumber", "XY", data_column]]
+        subdf["index"] = subdf.groupby(["WellNumber", "XY"]).cumcount()
+        subdf = subdf.pivot(
+            index="index", columns=["WellNumber", "XY"], values=data_column
+        )
+        logger.info(
+            f"writing static {data_column} table with shape {subdf.shape}: {output_filename}"
+        )
+        subdf.to_csv(output_filename)
+
+        # Pivot to generate a column for each WellNumber
+        stacked_df = input_df[["WellNumber", data_column]].copy()
+        stacked_df["count"] = stacked_df.groupby("WellNumber").cumcount()
+        stacked_df = stacked_df.pivot(
+            index="count", columns="WellNumber", values=data_column
+        )
+        output_filename = os.path.join(
+            output_folder, f"{data_column}_stacked_static.csv"
+        )
+        logger.info(
+            f"writing stacked {data_column} table with shape {stacked_df.shape}: {output_filename}"
+        )
+        stacked_df.to_csv(output_filename)
 
 
 if __name__ == "__main__":
@@ -417,10 +469,13 @@ if __name__ == "__main__":
     for input_folder in input_folders:
         logger.info(f"Processing {input_folder}")
         output_subfolder = input_folder.replace(INPUT_FOLDER, OUTPUT_FOLDER)
-        # edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
-        # generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
-        # logger.info("\n")
+        edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
+        generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
+        logger.info("\n")
         mass_displacement_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
         generate_mass_displacement_files(
             mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
         )
+        logger.info("\n")
+        cov_file_path = os.path.join(input_folder, COV_FILE)
+        generate_cov_files(cov_file_path, output_subfolder, T_VARIES, PLOT)
