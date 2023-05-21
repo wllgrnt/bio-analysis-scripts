@@ -91,26 +91,33 @@ import glob
 import logging
 import os
 import re
-from numpy import average
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 sns.set_style("whitegrid")
-
-INPUT_FOLDER = "input_folder"  # the path to all the input files
-INPUT_SUBFOLDER = (
-    "analysis"  # the path to the specific files we're analysing right now.
-)
-OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
-T_VARIES = True
-EDGE_SPOT_FILE = "All_measurements.csv"
-LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
-PLOT = False
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+# ----------- CHANGE HERE ---------------
+INPUT_FOLDER = "input_folder"  # the path to all the input files
+INPUT_SUBFOLDER = (
+    "no_t_variance"  # the path to the specific files we're analysing right now.
+)
+OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
+T_VARIES = False
+EDGE_SPOT_FILE = "All_measurements.csv"
+MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
+# Sometimes the mito or 60mer is not present. If not, comment out the line:
+MASS_DISPLACEMENT_COLS = {
+    # "mass_displacement_mito": "Intensity_MassDisplacement_mito",
+    "mass_displacement_60mer": "Intensity_MassDisplacement_MIRO160mer"
+}
+LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
+PLOT = True
+# ---------------------------------------
 
 
 def generate_edge_spot_files(
@@ -126,6 +133,7 @@ def generate_edge_spot_files(
         - output_folder: where to output the processed files.
         - t_varies. If we have multiple timepoints and must therefore process the file differently.
             We check this with asserts.
+        - do_plot: whether to plot the output.
     """
     logger.info(
         f"Generating edge spot data for {input_path}, output to {output_folder}, t_varies={t_varies}"
@@ -191,13 +199,13 @@ def generate_edge_spot_files(
         )
 
 
-def extract_edgespot_cols(cellprofiler_df: pd.DataFrame, t_varies) -> pd.DataFrame:
+def extract_edgespot_cols(
+    cellprofiler_df: pd.DataFrame, t_varies: bool
+) -> pd.DataFrame:
     """
     Extract the (well_number, xy, t) columns and aggregate over W, XY, T
     to generate the edge spot data.
-
     Makes a number of assumptions about the struture of the input df.
-
     """
     logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
     filename_column = "FileName_Hoechst"  # from which we extract the well number and xy
@@ -238,6 +246,35 @@ def extract_edgespot_cols(cellprofiler_df: pd.DataFrame, t_varies) -> pd.DataFra
     return aggregate_df
 
 
+def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFrame:
+    """Extract well number, xy, t, mass, displacement columns from the cellprofiler df.
+    As above, makes strong assumptions about input shape and labels.
+
+    Christina is a criminal and thus the miro and mito displacments may or may not be there.
+    """
+    logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
+    filename_column = "FileName_MIRO160mer"
+    output_df = cellprofiler_df.copy()
+    if t_varies:
+        output_df["T"] = output_df[filename_column].apply(extract_timestamp)
+    output_df["XY"] = output_df[filename_column].apply(extract_xy)
+    output_df["WellNumber"] = output_df[filename_column].apply(extract_wellnumber)
+    cols = []
+    if "mass_displacement_mito" in MASS_DISPLACEMENT_COLS:
+        col = MASS_DISPLACEMENT_COLS["mass_displacement_mito"]
+        output_df["mass_displacement_mito"] = output_df[col]
+        cols.append("mass_displacement_mito")
+    if "mass_displacement_60mer" in MASS_DISPLACEMENT_COLS:
+        col = MASS_DISPLACEMENT_COLS["mass_displacement_60mer"]
+        output_df["mass_displacement_60mer"] = output_df[col]
+        cols.append("mass_displacement_60mer")
+    cols = ["WellNumber", "XY"] + cols
+    if t_varies:
+        cols.append("T")
+    output_df = output_df[cols].reset_index(drop=True)
+    return output_df
+
+
 def extract_xy(input_string: str) -> int:
     try:
         return int(re.search(r"(?<=_XY)\d+", input_string).group(0))
@@ -259,11 +296,131 @@ def save_pivot_table(data, values, index, columns, output_filename: str):
     pivot.to_csv(output_filename)
 
 
+def generate_mass_displacement_files(
+    mass_displacement_file_path, output_folder, t_varies, do_plot=True
+):
+    """
+    Aggregate the mass displacement over all cells.
+
+    Args:
+        - input_path: the path to the input file. Must have the following columns:
+        - output_folder: where to output the processed files.
+        - t_varies. If we have multiple timepoints and must therefore process the file differently.
+            We check this with asserts.
+        - do_plot: whether to plot the output.
+    """
+    logger.info(
+        f"Generating mass displacement data for {mass_displacement_file_path}, output to {output_folder}, t_varies={t_varies}"
+    )
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    raw_input_df = pd.read_csv(mass_displacement_file_path)
+    processed_df = extract_massdisplacement_cols(raw_input_df, t_varies)
+    for displacement_type in MASS_DISPLACEMENT_COLS:
+        if t_varies:
+            # A file per wellnumber, with T and XY as columns and subcolumns
+            subdf = processed_df[["WellNumber", "XY", "T", displacement_type]]
+            for well_number in subdf.WellNumber.unique():
+                well_number_subdf = subdf[subdf.WellNumber == well_number]
+                # highly mysterious pandas esoterica to generate columns for T and XY
+                output_filename = os.path.join(
+                    output_folder, f"{displacement_type}_time_and_xy_{well_number}.csv"
+                )
+                output_df = (
+                    well_number_subdf.drop(columns=["WellNumber"])
+                    .set_index(["T", "XY"])
+                    .squeeze()
+                )
+                output_df = output_df.reset_index(name="value")
+                output_df["index"] = output_df.groupby(["T", "XY"]).cumcount()
+                output_df = output_df.set_index(["T", "XY", "index"])["value"].unstack(
+                    level=[0, 1]
+                )
+                logger.info(
+                    f"writing mass displacement table with shape {output_df.shape}: {output_filename}"
+                )
+                output_df.to_csv(output_filename)
+
+                # pivot to generate a column for each T
+                stacked_df = well_number_subdf.drop(columns=["WellNumber", "XY"])
+                stacked_df["count"] = stacked_df.groupby("T").cumcount()
+                stacked_df = stacked_df.pivot(
+                    index="count", columns="T", values=displacement_type
+                )
+                output_filename = os.path.join(
+                    output_folder, f"{displacement_type}_stacked_{well_number}.csv"
+                )
+                logger.info(
+                    f"writing stacked mass displacement table with shape {stacked_df.shape}: {output_filename}"
+                )
+                stacked_df.to_csv(output_filename)
+
+            # Average over Well, T, save and plot
+            average_over_time = (
+                subdf.groupby(["WellNumber", "T"])[displacement_type]
+                .mean()
+                .reset_index()
+            )
+            pivot = pd.pivot_table(
+                data=average_over_time,
+                values=displacement_type,
+                index="T",
+                columns="WellNumber",
+            )
+            pivot = pivot.divide(pivot.iloc[0])
+            output_path = os.path.join(
+                output_folder, f"{displacement_type}_mean_over_time_normalised.csv"
+            )
+            logger.info(
+                f"Normalised pivot table has shape {pivot.shape}, writing to {output_path}"
+            )
+            pivot.to_csv(output_path)
+            if do_plot:
+                pivot.plot(
+                    title=f"Mean {displacement_type} over time, normalised to T0"
+                )
+                plt.show()
+
+        else:
+            # Generate a table with WellNumber and XY as columns, and the mass displacement as the vals
+            output_filename = os.path.join(
+                output_folder, f"{displacement_type}_static.csv"
+            )
+            subdf = processed_df[["WellNumber", "XY", displacement_type]]
+            subdf["index"] = subdf.groupby(["WellNumber", "XY"]).cumcount()
+            subdf = subdf.pivot(
+                index="index", columns=["WellNumber", "XY"], values=displacement_type
+            )
+            logger.info(
+                f"writing static mass displacement table with shape {subdf.shape}: {output_filename}"
+            )
+            subdf.to_csv(output_filename)
+
+            # Pivot to generate a column for each WellNumber
+            stacked_df = processed_df[["WellNumber", displacement_type]].copy()
+            stacked_df["count"] = stacked_df.groupby("WellNumber").cumcount()
+            stacked_df = stacked_df.pivot(
+                index="count", columns="WellNumber", values=displacement_type
+            )
+            output_filename = os.path.join(
+                output_folder, f"{displacement_type}_stacked_static.csv"
+            )
+            logger.info(
+                f"writing stacked mass displacement table with shape {stacked_df.shape}: {output_filename}"
+            )
+            stacked_df.to_csv(output_filename)
+
+
 if __name__ == "__main__":
     input_folders = glob.glob(os.path.join(INPUT_FOLDER, INPUT_SUBFOLDER, "*/"))
     for input_folder in input_folders:
         logger.info(f"Processing {input_folder}")
-        edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
         output_subfolder = input_folder.replace(INPUT_FOLDER, OUTPUT_FOLDER)
-        generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
-        logger.info("\n")
+        # edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
+        # generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
+        # logger.info("\n")
+        mass_displacement_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
+        generate_mass_displacement_files(
+            mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
+        )
