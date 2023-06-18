@@ -107,7 +107,7 @@ logging.basicConfig(level=logging.INFO)
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
 INPUT_SUBFOLDER = (
-    "analysis"  # the path to the specific files we're analysing right now.
+    "analysis_230615"  # the path to the specific files we're analysing right now.
 )
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
 EDGE_SPOT_FILE = "All_measurements.csv"
@@ -115,12 +115,12 @@ MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
 COV_FILE = "Perinuclear_region.csv"
 # Sometimes the mito or 60mer is not present. If not, comment out the line:
 MASS_DISPLACEMENT_COLS = {
-    "mass_displacement_mito": "Intensity_MassDisplacement_mito",
+    # "mass_displacement_mito": "Intensity_MassDisplacement_mito",
     "mass_displacement_60mer": "Intensity_MassDisplacement_MIRO160mer",
 }
 LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
 PLOT = False
-T_VARIES = True
+T_VARIES = False
 # ---------------------------------------
 
 
@@ -399,6 +399,8 @@ def generate_ragged_df(
                 f"writing {data_column} table with shape {output_df.shape}: {output_filename}"
             )
             output_df.to_csv(output_filename)
+            ###################
+            # TODO pivot to generate a table where the rows are XY, columns at T, vals are the median.
 
             # pivot to generate a column for each T
             stacked_df = well_number_subdf.drop(columns=["WellNumber", "XY"])
@@ -448,6 +450,15 @@ def generate_ragged_df(
             f"writing static {data_column} table with shape {subdf.shape}: {output_filename}"
         )
         subdf.to_csv(output_filename)
+
+        # Generate a table with Wellnumber as columns, XY as rows, and the median of the data column as the vals.
+        median_df = (
+            input_df.groupby(["WellNumber", "XY"])[[data_column]].median().unstack().T
+        )
+        median_filename = os.path.join(
+            output_folder, f"{data_column}_fov_median_static.csv"
+        )
+        median_df.to_csv(median_filename)
 
         # Pivot to generate a column for each WellNumber
         stacked_df = input_df[["WellNumber", data_column]].copy()
