@@ -106,9 +106,8 @@ logging.basicConfig(level=logging.INFO)
 
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
-INPUT_SUBFOLDER = (
-    "analysis_230615"  # the path to the specific files we're analysing right now.
-)
+
+INPUT_SUBFOLDERS = ["231116"] 
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
 EDGE_SPOT_FILE = "All_measurements.csv"
 MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
@@ -116,7 +115,8 @@ COV_FILE = "Perinuclear_region.csv"
 # Sometimes the mito or 60mer is not present. If not, comment out the line:
 MASS_DISPLACEMENT_COLS = {
     # "mass_displacement_mito": "Intensity_MassDisplacement_mito",
-    "mass_displacement_60mer": "Intensity_MassDisplacement_MIRO160mer",
+    "mass_displacement_60mer": ["Intensity_MassDisplacement_MIRO160mer", "Intensity_MassDisplacement_MIRO160mer_rescaled"],
+    # "mass_displacement_60mer": "Intensity_MassDisplacement_pex",
 }
 LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
 PLOT = False
@@ -257,6 +257,7 @@ def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFra
     Christina is a criminal and thus the miro and mito displacments may or may not be there.
     """
     logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
+    # filename_column = "FileName_pex"
     filename_column = "FileName_MIRO160mer"
     output_df = cellprofiler_df.copy()
     if t_varies:
@@ -269,8 +270,14 @@ def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFra
         output_df["mass_displacement_mito"] = output_df[col]
         cols.append("mass_displacement_mito")
     if "mass_displacement_60mer" in MASS_DISPLACEMENT_COLS:
-        col = MASS_DISPLACEMENT_COLS["mass_displacement_60mer"]
-        output_df["mass_displacement_60mer"] = output_df[col]
+        for col in MASS_DISPLACEMENT_COLS["mass_displacement_60mer"]:
+            try:
+                output_df["mass_displacement_60mer"] = output_df[col]
+                break
+            except KeyError:
+                continue
+        else:
+            raise ValueError('Could not find a column for "mass_displacement_60mer"')
         cols.append("mass_displacement_60mer")
     cols = ["WellNumber", "XY"] + cols
     if t_varies:
@@ -283,14 +290,21 @@ def extract_cov_cols(cellprofiler_df, t_varies: bool) -> pd.DataFrame:
     """Extract well number, xy, t, and CoV."""
     logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
     filename_column = "FileName_MIRO160mer"
-    std_column = "Intensity_StdIntensity_MIRO160mer"
-    mean_column = "Intensity_MeanIntensity_MIRO160mer"
+    std_columns = ["Intensity_StdIntensity_MIRO160mer", "Intensity_StdIntensity_MIRO160mer_rescaled"]
+    mean_columns = ["Intensity_MeanIntensity_MIRO160mer", "Intensity_MeanIntensity_MIRO160mer_rescaled"]
     output_df = cellprofiler_df.copy()
     if t_varies:
         output_df["T"] = output_df[filename_column].apply(extract_timestamp)
     output_df["XY"] = output_df[filename_column].apply(extract_xy)
     output_df["WellNumber"] = output_df[filename_column].apply(extract_wellnumber)
-    output_df["CoV"] = output_df[std_column] / output_df[mean_column]
+    for std_col, mean_col in zip(std_columns, mean_columns):
+        try:
+            output_df["CoV"] = output_df[std_col] / output_df[mean_col]
+            break
+        except KeyError:
+            continue
+    else:
+        raise ValueError('Could not find a column for "CoV"')
     cols = ["WellNumber", "XY", "CoV"]
     if t_varies:
         cols.append("T")
@@ -476,17 +490,18 @@ def generate_ragged_df(
 
 
 if __name__ == "__main__":
-    input_folders = glob.glob(os.path.join(INPUT_FOLDER, INPUT_SUBFOLDER, "*/"))
-    for input_folder in input_folders:
-        logger.info(f"Processing {input_folder}")
-        output_subfolder = input_folder.replace(INPUT_FOLDER, OUTPUT_FOLDER)
-        edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
-        generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
-        logger.info("\n")
-        mass_displacement_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
-        generate_mass_displacement_files(
-            mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
-        )
-        logger.info("\n")
-        cov_file_path = os.path.join(input_folder, COV_FILE)
-        generate_cov_files(cov_file_path, output_subfolder, T_VARIES, PLOT)
+    for INPUT_SUBFOLDER in INPUT_SUBFOLDERS:
+        input_folders = glob.glob(os.path.join(INPUT_FOLDER, INPUT_SUBFOLDER, "*/"))
+        for input_folder in input_folders:
+            logger.info(f"Processing {input_folder}")
+            output_subfolder = input_folder.replace(INPUT_FOLDER, OUTPUT_FOLDER)
+            edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
+            generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
+            logger.info("\n")
+            mass_displacement_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
+            generate_mass_displacement_files(
+                mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
+            )
+            logger.info("\n")
+            cov_file_path = os.path.join(input_folder, COV_FILE)
+            generate_cov_files(cov_file_path, output_subfolder, T_VARIES, PLOT)
