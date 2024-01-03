@@ -107,7 +107,7 @@ logging.basicConfig(level=logging.INFO)
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
 
-INPUT_SUBFOLDERS = ["no_rescale"] 
+INPUT_SUBFOLDERS = ["batch5"]
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
 EDGE_SPOT_FILE = "All_measurements.csv"
 MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
@@ -115,7 +115,10 @@ COV_FILE = "Perinuclear_region.csv"
 # Sometimes the mito or 60mer is not present. If not, comment out the line:
 MASS_DISPLACEMENT_COLS = {
     # "mass_displacement_mito": "Intensity_MassDisplacement_mito",
-    "mass_displacement_60mer": ["Intensity_MassDisplacement_MIRO160mer", "Intensity_MassDisplacement_MIRO160mer_rescaled"],
+    "mass_displacement_60mer": [
+        "Intensity_MassDisplacement_MIRO160mer",
+        "Intensity_MassDisplacement_MIRO160mer_rescaled",
+    ],
     # "mass_displacement_60mer": "Intensity_MassDisplacement_pex",
 }
 LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
@@ -257,6 +260,7 @@ def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFra
     Christina is a criminal and thus the miro and mito displacments may or may not be there.
     """
     logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
+    # filename_column = "FileName_mito"
     # filename_column = "FileName_pex"
     filename_column = "FileName_MIRO160mer"
     output_df = cellprofiler_df.copy()
@@ -286,12 +290,20 @@ def extract_massdisplacement_cols(cellprofiler_df, t_varies: bool) -> pd.DataFra
     return output_df
 
 
-def extract_cov_cols(cellprofiler_df, t_varies: bool, bonus_cols: list[str] = []) -> pd.DataFrame:
+def extract_cov_cols(
+    cellprofiler_df, t_varies: bool, bonus_cols: list[str] = []
+) -> pd.DataFrame:
     """Extract well number, xy, t, and CoV."""
     logger.info(f"Extracting columns, input df has shape {cellprofiler_df.shape}")
     filename_column = "FileName_MIRO160mer"
-    std_columns = ["Intensity_StdIntensity_MIRO160mer", "Intensity_StdIntensity_MIRO160mer_rescaled"]
-    mean_columns = ["Intensity_MeanIntensity_MIRO160mer", "Intensity_MeanIntensity_MIRO160mer_rescaled"]
+    std_columns = [
+        "Intensity_StdIntensity_MIRO160mer",
+        "Intensity_StdIntensity_MIRO160mer_rescaled",
+    ]
+    mean_columns = [
+        "Intensity_MeanIntensity_MIRO160mer",
+        "Intensity_MeanIntensity_MIRO160mer_rescaled",
+    ]
     output_df = cellprofiler_df.copy()
     if t_varies:
         output_df["T"] = output_df[filename_column].apply(extract_timestamp)
@@ -386,67 +398,69 @@ def generate_cov_files(cov_file_path, output_folder, t_varies, do_plot=True):
         do_plot=do_plot,
     )
 
-def generate_extra_dispersion_measures(cov_file_path, output_folder, t_varies, bonus_cols, do_plot=True):
-    logger.info('I am going to blow myself up')
+
+def generate_extra_dispersion_measures(
+    cov_file_path, output_folder, t_varies, bonus_cols, do_plot=True
+):
+    logger.info("I am going to blow myself up")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     raw_input_df = pd.read_csv(cov_file_path)
     processed_df = extract_cov_cols(raw_input_df, t_varies, bonus_cols=bonus_cols)
 
-    logger.info('I am going to blow myself up a second time')
+    logger.info("I am going to blow myself up a second time")
 
-    processed_df['mad_over_mean'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['mad_over_median'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['mad_over_integrated_area'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    processed_df['range'] = processed_df['Intensity_MaxIntensity_MIRO160mer'] - processed_df['Intensity_MinIntensity_MIRO160mer']
-    processed_df['range_over_mean'] = processed_df['range'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['range_over_median'] = processed_df['range'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['range_over_integrated_area'] = processed_df['range'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    processed_df['iqr'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']
-    processed_df['iqr_over_mean'] = processed_df['iqr'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['iqr_over_median'] = processed_df['iqr'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['iqr_over_integrated_area'] = processed_df['iqr'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    processed_df['q3_over_mean'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['q3_over_median'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['q3_over_integrated_area'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    processed_df['q1_over_mean'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['q1_over_median'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['q1_over_integrated_area'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    processed_df['quartile_coef_of_dispersion'] = (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']) / (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] + processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'])
-    processed_df['pearsons_median_skewness'] = 3 * (processed_df['Intensity_MeanIntensity_MIRO160mer'] - processed_df['Intensity_MedianIntensity_MIRO160mer']) / processed_df['Intensity_StdIntensity_MIRO160mer']
-    processed_df['index_of_dispersion_mean'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    processed_df['index_of_dispersion_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['cov_with_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    processed_df['cov_with_integrated_area'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    
+    # processed_df['mad_over_mean'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['mad_over_median'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['mad_over_integrated_area'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
+    # processed_df['range'] = processed_df['Intensity_MaxIntensity_MIRO160mer'] - processed_df['Intensity_MinIntensity_MIRO160mer']
+    # processed_df['range_over_mean'] = processed_df['range'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['range_over_median'] = processed_df['range'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['range_over_integrated_area'] = processed_df['range'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
+    # processed_df['iqr'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']
+    # processed_df['iqr_over_mean'] = processed_df['iqr'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['iqr_over_median'] = processed_df['iqr'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['iqr_over_integrated_area'] = processed_df['iqr'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
+    # processed_df['q3_over_mean'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['q3_over_median'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['q3_over_integrated_area'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
+    # processed_df['q1_over_mean'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['q1_over_median'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['q1_over_integrated_area'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
+    # processed_df['quartile_coef_of_dispersion'] = (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']) / (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] + processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'])
+    # processed_df['pearsons_median_skewness'] = 3 * (processed_df['Intensity_MeanIntensity_MIRO160mer'] - processed_df['Intensity_MedianIntensity_MIRO160mer']) / processed_df['Intensity_StdIntensity_MIRO160mer']
+    # processed_df['index_of_dispersion_mean'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MeanIntensity_MIRO160mer']
+    # processed_df['index_of_dispersion_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['cov_with_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
+    # processed_df['cov_with_integrated_area'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
 
-    derived_cols = ['mad_over_mean',
-                'mad_over_median',
-                'mad_over_integrated_area',
-                'range',
-                'range_over_mean',
-                'range_over_median', 
-                'range_over_integrated_area', 
-                'iqr', 
-                'iqr_over_mean',
-                'iqr_over_median', 
-                'iqr_over_integrated_area',
-                'q3_over_mean',
-                'q3_over_median',
-                'q3_over_integrated_area',
-                'q1_over_mean',
-                'q1_over_median',
-                'q1_over_integrated_area',
-                'quartile_coef_of_dispersion',
-                'pearsons_median_skewness',
-                'index_of_dispersion_mean',
-                'index_of_dispersion_median',
-                'cov_with_median', 
-                'cov_with_integrated_area']
+    derived_cols = [  # 'mad_over_mean',
+        # 'mad_over_median',
+        # 'mad_over_integrated_area',
+        # 'range',
+        # 'range_over_mean',
+        # 'range_over_median',
+        # 'range_over_integrated_area',
+        # 'iqr',
+        # 'iqr_over_mean',
+        # 'iqr_over_median',
+        # 'iqr_over_integrated_area',
+        # 'q3_over_mean',
+        # 'q3_over_median',
+        # 'q3_over_integrated_area',
+        # 'q1_over_mean',
+        # 'q1_over_median',
+        # 'q1_over_integrated_area',
+        # 'quartile_coef_of_dispersion',
+        # 'pearsons_median_skewness',
+        # 'index_of_dispersion_mean',
+        # 'index_of_dispersion_median',
+        # 'cov_with_median',
+        # 'cov_with_integrated_area'
+    ]
 
-
-
+    # for bonus_col in derived_cols:
     for bonus_col in bonus_cols + derived_cols:
         generate_ragged_df(
             processed_df,
@@ -455,7 +469,6 @@ def generate_extra_dispersion_measures(cov_file_path, output_folder, t_varies, b
             t_varies=t_varies,
             do_plot=do_plot,
         )
-
 
 
 def generate_ragged_df(
@@ -561,19 +574,7 @@ def generate_ragged_df(
         stacked_df.to_csv(output_filename)
 
 
-
-bonus_cols = [
-                "Intensity_MassDisplacement_MIRO160mer",
-                "Intensity_MADIntensity_MIRO160mer",
-                "Intensity_StdIntensity_MIRO160mer",
-                "Intensity_MinIntensity_MIRO160mer",
-                "Intensity_MaxIntensity_MIRO160mer",
-                "Intensity_LowerQuartileIntensity_MIRO160mer",
-                "Intensity_UpperQuartileIntensity_MIRO160mer",
-                "Intensity_MeanIntensity_MIRO160mer",
-                "Intensity_MedianIntensity_MIRO160mer",
-                "Intensity_IntegratedIntensity_MIRO160mer"
-            ]
+bonus_cols = ["Intensity_MassDisplacement_MIRO160mer", "GINI_Gini_MIRO160mer"]
 
 
 if __name__ == "__main__":
@@ -583,13 +584,23 @@ if __name__ == "__main__":
             logger.info(f"Processing {input_folder}")
             output_subfolder = input_folder.replace(INPUT_FOLDER, OUTPUT_FOLDER)
             edge_spot_file_path = os.path.join(input_folder, EDGE_SPOT_FILE)
-            generate_edge_spot_files(edge_spot_file_path, output_subfolder, T_VARIES, PLOT)
+            generate_edge_spot_files(
+                edge_spot_file_path, output_subfolder, T_VARIES, PLOT
+            )
             logger.info("\n")
-            mass_displacement_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
+            mass_displacement_file_path = os.path.join(
+                input_folder, MASS_DISPLACEMENT_FILE
+            )
             generate_mass_displacement_files(
                 mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
             )
             logger.info("\n")
             cov_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
             generate_cov_files(cov_file_path, output_subfolder, T_VARIES, PLOT)
-            generate_extra_dispersion_measures(cov_file_path, output_subfolder, T_VARIES,  bonus_cols=bonus_cols, do_plot=PLOT)
+            generate_extra_dispersion_measures(
+                cov_file_path,
+                output_subfolder,
+                T_VARIES,
+                bonus_cols=bonus_cols,
+                do_plot=PLOT,
+            )
