@@ -152,14 +152,21 @@ all_edges_df = pd.concat(edge_dfs, keys=edge_dfs.keys()).reset_index(names=['dat
 all_edges_df_with_track_info = all_edges_df.merge(per_track, how='left', on=['date', 'condition', 'cell', 'TRACK_ID'], validate='m:1')
 
 # %%
-
+change_rate_filter = 0.1
 distance_filter = 2.8
-all_edges_df_with_track_info_filtered = all_edges_df_with_track_info[all_edges_df_with_track_info['max_distance_traveled'] > distance_filter]
+displacement_filter = 0
+all_edges_df_with_track_info_filtered = all_edges_df_with_track_info[(all_edges_df_with_track_info['max_distance_traveled'] > distance_filter) &
+                                                                    (all_edges_df_with_track_info['DIRECTIONAL_CHANGE_RATE'] < change_rate_filter) &
+                                                                    (all_edges_df_with_track_info['DISPLACEMENT'] > displacement_filter)
+
+                                                                     ].copy()
 
 all_edges_df_with_track_info_filtered['final_y_is_above_zero'] = all_edges_df_with_track_info_filtered['final_y_position'] > 0
 
-
-sns.violinplot(hue='condition', y='SPEED', x='final_y_is_above_zero', data=all_edges_df_with_track_info_filtered[all_edges_df_with_track_info_filtered['condition'] != 'no_TRAK_77'], cut=0)
+fig, ax = plt.subplots(figsize=(10, 10))
+# sns.violinplot(hue='condition', y='SPEED', x='final_y_is_above_zero', data=all_edges_df_with_track_info_filtered[all_edges_df_with_track_info_filtered['condition'] != 'no_TRAK_77'], cut=0)
+sns.boxplot(hue='condition', y='SPEED', x='final_y_is_above_zero', data=all_edges_df_with_track_info_filtered[all_edges_df_with_track_info_filtered['condition'] != 'no_TRAK_77'])
+plt.show()
 # fig, ax = plt.subplots(figsize=(10, 10))
 
 # sns.violinplot(x='condition', y='final_y_position', hue='final_y_is_above_zero', data=per_track_filtered, cut=0)
@@ -185,26 +192,26 @@ sns.violinplot(hue='condition', y='SPEED', x='final_y_is_above_zero', data=all_e
 
 
 
-# # %%
-distance_filter = 2.8
-per_track_filtered = per_track[per_track['max_distance_traveled'] > distance_filter]
+# # # %%
+# distance_filter = 2.8
+# per_track_filtered = per_track[per_track['max_distance_traveled'] > distance_filter]
 
-per_track_filtered['final_y_is_above_zero'] = per_track_filtered['final_y_position'] > 0
+# per_track_filtered['final_y_is_above_zero'] = per_track_filtered['final_y_position'] > 0
 
-# fig, ax = plt.subplots(figsize=(10, 10))
+# # fig, ax = plt.subplots(figsize=(10, 10))
 
-# sns.violinplot(x='condition', y='final_y_position', hue='final_y_is_above_zero', data=per_track_filtered, cut=0)
-# plt.axhline(y=0)
+# # sns.violinplot(x='condition', y='final_y_position', hue='final_y_is_above_zero', data=per_track_filtered, cut=0)
+# # plt.axhline(y=0)
 
 
-# for col in ['track_mean_speed', 'track_max_speed', 'track_min_speed', 'track_median_speed', 'track_std_speed', 'mean_straight_line_speed', 'mean_directional_change_rate']:
-for col in ['track_median_speed']:
-    fig, ax = plt.subplots(figsize=(10, 10))
-    sns.violinplot(hue='condition', y=col, x='final_y_is_above_zero', data=per_track_filtered[per_track_filtered['condition'] != 'no_TRAK_77'], cut=0)
-    plt.title(col)
-    plt.show()
-    # plt.savefig(f'plots/{col}.png')
-    # plt.close()
+# # for col in ['track_mean_speed', 'track_max_speed', 'track_min_speed', 'track_median_speed', 'track_std_speed', 'mean_straight_line_speed', 'mean_directional_change_rate']:
+# for col in ['track_median_speed']:
+#     fig, ax = plt.subplots(figsize=(10, 10))
+#     sns.violinplot(hue='condition', y=col, x='final_y_is_above_zero', data=per_track_filtered[per_track_filtered['condition'] != 'no_TRAK_77'], cut=0)
+#     plt.title(col)
+#     plt.show()
+#     # plt.savefig(f'plots/{col}.png')
+#     # plt.close()
 # %%
 
 

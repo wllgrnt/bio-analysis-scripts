@@ -2,6 +2,7 @@
 input_folder/
 output_folder/
 archive/
+plots/
 
 *.cppipe
 # vim cruft
