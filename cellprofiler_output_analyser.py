@@ -107,7 +107,7 @@ logging.basicConfig(level=logging.INFO)
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
 
-INPUT_SUBFOLDERS = ["batch5"]
+INPUT_SUBFOLDERS = ["batch12"]
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
 EDGE_SPOT_FILE = "All_measurements.csv"
 MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
@@ -595,7 +595,7 @@ if __name__ == "__main__":
                 mass_displacement_file_path, output_subfolder, T_VARIES, PLOT
             )
             logger.info("\n")
-            cov_file_path = os.path.join(input_folder, MASS_DISPLACEMENT_FILE)
+            cov_file_path = os.path.join(input_folder, COV_FILE)
             generate_cov_files(cov_file_path, output_subfolder, T_VARIES, PLOT)
             generate_extra_dispersion_measures(
                 cov_file_path,
