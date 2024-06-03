@@ -1,2 +1,2 @@
-# christina-analysis-scripts
-Data transforms for CG bio projects
+# bio-analysis-scripts
+Data transforms for computational bio projects
