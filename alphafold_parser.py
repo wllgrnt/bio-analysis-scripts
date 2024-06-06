@@ -2,6 +2,7 @@ import gemmi
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.cm import Dark2
+import os
 
 def extract_cif_info_by_chain(cif_file):
     # Read the CIF file
@@ -31,7 +32,8 @@ def extract_cif_info_by_chain(cif_file):
 
     return chain_info
 
-def plot_b_factors_by_chain(chain_info):
+def plot_b_factors_by_chain(chain_info, output_folder, base_filename):
+    # cmap = get_cmap('Dark2')
     colors = Dark2.colors
 
     chain_names = list(chain_info.keys())
@@ -69,9 +71,33 @@ def plot_b_factors_by_chain(chain_info):
             axes[1, idx].set_ylabel('Alpha Carbon B Factor')
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f"{base_filename}.png"))
+    plt.close()
+
+def output_csv_by_chain(chain_info, output_folder, base_filename):
+    for chain_name, data in chain_info.items():
+        csv_file = os.path.join(output_folder, f"{base_filename}_{chain_name}.csv")
+        with open(csv_file, "w") as f:
+            f.write("residue_number,b_factor\n")
+            for residue_number, b_factor in data["alpha_carbons"]:
+                f.write(f"{residue_number},{b_factor}\n")
+
+def process_cif_files(input_folder, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    cif_files = [f for f in os.listdir(input_folder) if f.endswith('.cif')]
+    
+    for cif_file in cif_files:
+        cif_path = os.path.join(input_folder, cif_file)
+        base_filename = os.path.splitext(cif_file)[0]
+
+        chain_info = extract_cif_info_by_chain(cif_path)
+        output_csv_by_chain(chain_info, output_folder, base_filename)
+        plot_b_factors_by_chain(chain_info, output_folder, base_filename)
 
 # Example usage
-cif_file = "input_folder/fold_trak1_dimer_model_0.cif"
-chain_info = extract_cif_info_by_chain(cif_file)
-plot_b_factors_by_chain(chain_info)
+input_folder = "input_folder/cifs"
+output_folder = "output_folder/cifs"
+
+process_cif_files(input_folder, output_folder)

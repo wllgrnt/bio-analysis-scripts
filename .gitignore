@@ -1,4 +1,5 @@
 # ignore data files
+*.csv
 input_folder/
 output_folder/
 archive/
