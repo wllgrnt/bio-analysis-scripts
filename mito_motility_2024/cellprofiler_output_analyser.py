@@ -87,8 +87,6 @@ Script parameters:
     - plot: boolean, whether to plot the output.
 
 
-TODO: Refactor - there is redundancy, especially between the CoV and mass displacement code
-
 """
 import glob
 import logging
@@ -107,7 +105,7 @@ logging.basicConfig(level=logging.INFO)
 # ----------- CHANGE HERE ---------------
 INPUT_FOLDER = "input_folder"  # the path to all the input files
 
-INPUT_SUBFOLDERS = ["batch12"]
+INPUT_SUBFOLDERS = ["batch14"]
 OUTPUT_FOLDER = "output_folder"  # output will be saved to OUTPUT_FOLDER/INPUT_SUBFOLDER
 EDGE_SPOT_FILE = "All_measurements.csv"
 MASS_DISPLACEMENT_FILE = "Expand_Nuclei.csv"
@@ -124,6 +122,9 @@ MASS_DISPLACEMENT_COLS = {
 LOGGING_LEVEL = logging.INFO  # logging.INFO or logging.ERROR  normally
 PLOT = False
 T_VARIES = False
+
+bonus_cols = ["Intensity_MassDisplacement_MIRO160mer", "GINI_Gini_MIRO160mer"]
+
 # ---------------------------------------
 
 
@@ -402,65 +403,16 @@ def generate_cov_files(cov_file_path, output_folder, t_varies, do_plot=True):
 def generate_extra_dispersion_measures(
     cov_file_path, output_folder, t_varies, bonus_cols, do_plot=True
 ):
-    logger.info("I am going to blow myself up")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     raw_input_df = pd.read_csv(cov_file_path)
     processed_df = extract_cov_cols(raw_input_df, t_varies, bonus_cols=bonus_cols)
 
-    logger.info("I am going to blow myself up a second time")
-
-    # processed_df['mad_over_mean'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['mad_over_median'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['mad_over_integrated_area'] = processed_df['Intensity_MADIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    # processed_df['range'] = processed_df['Intensity_MaxIntensity_MIRO160mer'] - processed_df['Intensity_MinIntensity_MIRO160mer']
-    # processed_df['range_over_mean'] = processed_df['range'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['range_over_median'] = processed_df['range'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['range_over_integrated_area'] = processed_df['range'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    # processed_df['iqr'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']
-    # processed_df['iqr_over_mean'] = processed_df['iqr'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['iqr_over_median'] = processed_df['iqr'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['iqr_over_integrated_area'] = processed_df['iqr'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    # processed_df['q3_over_mean'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['q3_over_median'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['q3_over_integrated_area'] = processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    # processed_df['q1_over_mean'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['q1_over_median'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['q1_over_integrated_area'] = processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-    # processed_df['quartile_coef_of_dispersion'] = (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] - processed_df['Intensity_LowerQuartileIntensity_MIRO160mer']) / (processed_df['Intensity_UpperQuartileIntensity_MIRO160mer'] + processed_df['Intensity_LowerQuartileIntensity_MIRO160mer'])
-    # processed_df['pearsons_median_skewness'] = 3 * (processed_df['Intensity_MeanIntensity_MIRO160mer'] - processed_df['Intensity_MedianIntensity_MIRO160mer']) / processed_df['Intensity_StdIntensity_MIRO160mer']
-    # processed_df['index_of_dispersion_mean'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MeanIntensity_MIRO160mer']
-    # processed_df['index_of_dispersion_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] **2 / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['cov_with_median'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_MedianIntensity_MIRO160mer']
-    # processed_df['cov_with_integrated_area'] = processed_df['Intensity_StdIntensity_MIRO160mer'] / processed_df['Intensity_IntegratedIntensity_MIRO160mer']
-
-    derived_cols = [  # 'mad_over_mean',
-        # 'mad_over_median',
-        # 'mad_over_integrated_area',
-        # 'range',
-        # 'range_over_mean',
-        # 'range_over_median',
-        # 'range_over_integrated_area',
-        # 'iqr',
-        # 'iqr_over_mean',
-        # 'iqr_over_median',
-        # 'iqr_over_integrated_area',
-        # 'q3_over_mean',
-        # 'q3_over_median',
-        # 'q3_over_integrated_area',
-        # 'q1_over_mean',
-        # 'q1_over_median',
-        # 'q1_over_integrated_area',
-        # 'quartile_coef_of_dispersion',
-        # 'pearsons_median_skewness',
-        # 'index_of_dispersion_mean',
-        # 'index_of_dispersion_median',
-        # 'cov_with_median',
-        # 'cov_with_integrated_area'
+  
+    derived_cols = [  #  insert extra cols here 
     ]
 
-    # for bonus_col in derived_cols:
     for bonus_col in bonus_cols + derived_cols:
         generate_ragged_df(
             processed_df,
@@ -498,8 +450,6 @@ def generate_ragged_df(
                 f"writing {data_column} table with shape {output_df.shape}: {output_filename}"
             )
             output_df.to_csv(output_filename)
-            ###################
-            # TODO pivot to generate a table where the rows are XY, columns at T, vals are the median.
 
             # pivot to generate a column for each T
             stacked_df = well_number_subdf.drop(columns=["WellNumber", "XY"])
@@ -573,8 +523,6 @@ def generate_ragged_df(
         )
         stacked_df.to_csv(output_filename)
 
-
-bonus_cols = ["Intensity_MassDisplacement_MIRO160mer", "GINI_Gini_MIRO160mer"]
 
 
 if __name__ == "__main__":

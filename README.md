@@ -1,2 +1,3 @@
 # bio-analysis-scripts
-Data transforms for computational bio projects
+
+Misc. data transforms for computational bio projects.
